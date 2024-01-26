@@ -1,0 +1,3 @@
+Device NVIDIA GeForce RTX 3090 (GA102)
+==PROF== Note that these metrics must be appended with a valid suffix before profiling them. See --help for more information on --query-metrics-mode.
+
