@@ -8,7 +8,7 @@ int main() {
     for (int i = 0; i < N; i++) {
         a[i] = rand() % 100;
     }
-
+   
     float *b = (float*) malloc(sizeof(float) * N);
     exclusive_scan(b, a, N);
 
