@@ -32,6 +32,28 @@ int co_rank_cir(int k, float* A, int n, float* B, int m, int A_start, int B_star
 }
 
 __device__ __host__
+void merge_seq(float* A, int A_len, float* B, int B_len, float* C, int st) {
+    int A_cnt = 0, B_cnt = 0;
+    while (A_cnt < A_len && B_cnt < B_len) {
+        if (A[A_cnt] < B[B_cnt]) {
+            C[A_cnt + B_cnt] = A[A_cnt];
+            ++A_cnt;
+        } else {
+            C[A_cnt + B_cnt] = B[B_cnt];
+            ++B_cnt;
+        }
+    }
+    while (A_cnt < A_len) {
+        C[A_cnt + B_cnt] = A[A_cnt];
+        ++A_cnt;
+    }
+    while (B_cnt < B_len) {
+        C[A_cnt + B_cnt] = B[B_cnt];
+        ++B_cnt;
+    }
+}
+
+__device__ __host__
 void merge_circular(volatile float* A, int A_start, int A_len,
                     volatile float* B, int B_start, int B_len, float* C) {
     int A_cnt = 0, B_cnt = 0;

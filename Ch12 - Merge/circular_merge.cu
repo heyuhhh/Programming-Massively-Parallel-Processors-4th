@@ -10,8 +10,8 @@ float* circular_merge(float *a, float *b, int n, int m) {
     cudaMemcpy(a_d, a, sizeof(float) * n, cudaMemcpyHostToDevice);
     cudaMemcpy(b_d, b, sizeof(float) * m, cudaMemcpyHostToDevice);
 
-    dim3 gridDim((n + m + TILE_SIZE * COARSE_FACTOR - 1) / (TILE_SIZE * COARSE_FACTOR));
-    dim3 blockDim(TILE_SIZE);
+    dim3 gridDim((n + m + SECTION_SIZE * COARSE_FACTOR - 1) / (SECTION_SIZE * COARSE_FACTOR));
+    dim3 blockDim(SECTION_SIZE);
 
     circularMergeSort<<<gridDim, blockDim>>>(a_d, b_d, c_d, n, m, n + m);
     cudaDeviceSynchronize();

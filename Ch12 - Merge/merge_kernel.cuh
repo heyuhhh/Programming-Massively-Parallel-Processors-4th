@@ -7,6 +7,9 @@ __device__ __host__
 int co_rank_cir(int k, float* A, int n, float* B, int m, int A_start, int B_start);
 
 __device__ __host__
+void merge_seq(float* A, int A_len, float* B, int B_len, float* C, int st);
+
+__device__ __host__
 void merge_circular(volatile float* A, int A_start, int A_len,
                     volatile float* B, int B_start, int B_len, float* C);
 

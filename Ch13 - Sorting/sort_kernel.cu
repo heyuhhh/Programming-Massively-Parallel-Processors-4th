@@ -1,7 +1,17 @@
 #include "sort_kernel.cuh"
 #include <cstdio>
-#define SECTION_SIZE 256
-#define COARSE_FACTOR 4
+
+__global__
+void merge_sort(float* a, float* c, const int N, int stride) {
+    int st = (blockDim.x * blockIdx.x + threadIdx.x) * (2 * stride);
+    int md = st + stride;
+    if (md < N) {
+        merge_seq(a + st, stride, a + md, min(stride, N - md), c + st, st);
+        for (int i = st; i < min(N, st + 2 * stride); i++) {
+            a[i] = c[i];
+        }
+    }
+}
 
 __global__
 void local_radix_sort(int* a, int* b, int* c, const int N, int iter) {

@@ -1,17 +1,23 @@
 #include <cstdio>
 #include <iostream>
-#include "radix_sort.cuh"
+#include <algorithm>
+#include "sort.cuh"
 #define N 10000000
-
+ 
 int main() {
-    int *a = (int*) malloc(sizeof(int) * N);
+    float *a = (float*) malloc(sizeof(float) * N);
     for (int i = 0; i < N; i++) {
-        a[i] = N - i;
+        a[i] = rand() / (float) RAND_MAX * 10;
     }
+    // radixSort(a, N);
+    mergeSort(a, N);
 
-    radixSort(a, N);
-
-    for (int i = 1000; i < 1100; i++) {
+    for (int i = 0; i < 100; i++) {
+        std::cout << a[i] << ' ';
+    }
+    std::cout << std::endl << std::endl;
+    std::sort(a, a + N);
+    for (int i = 0; i < 100; i++) {
         std::cout << a[i] << ' ';
     }
     std::cout << std::endl;

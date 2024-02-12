@@ -1,5 +1,21 @@
 #include <iostream>
-#include "radix_sort.cuh"
+#include "sort.cuh"
+
+void mergeSort(float* a, const int n) {
+    float *a_d, *tmp;
+    cudaMalloc((void**) &a_d, sizeof(float) * n);
+    cudaMalloc((void**) &tmp, sizeof(float) * n);
+    cudaMemcpy(a_d, a, sizeof(float) * n, cudaMemcpyHostToDevice);
+    for (int stride = 1; stride < n; stride <<= 1) {
+        int seg_num = (n + 2 * stride - 1) / (2 * stride);
+        int blockDim = min(seg_num, SECTION_SIZE);
+        int gridDim((seg_num + blockDim - 1) / blockDim);
+        merge_sort<<<gridDim, blockDim>>>(a_d, tmp, n, stride);
+    }
+    cudaMemcpy(a, a_d, sizeof(float) * n, cudaMemcpyDeviceToHost);
+    cudaFree(a_d);
+    cudaFree(tmp);
+}
 
 void radixSort(int* a, const int N) {
     int *a_d;
@@ -29,4 +45,8 @@ void radixSort(int* a, const int N) {
     }
 
     cudaMemcpy(a, a_d, sizeof(int) * N, cudaMemcpyDeviceToHost);
+    cudaFree(a_d);
+    cudaFree(b_d);
+    cudaFree(c_d);
+    cudaFree(d_d);
 }
