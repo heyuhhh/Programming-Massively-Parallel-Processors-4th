@@ -1,10 +1,5 @@
+#include "merge_kernel.cuh"
 #include <cstdio>
-
-#define N 20000000
-#define M 30000000
-#define K (N + M)
-#define TILE_SIZE 1024
-#define COARSE_FACTOR 8
 
 __device__ __host__
 int co_rank(int k, volatile float* A, int n, volatile float* B, int m) {
@@ -38,7 +33,7 @@ int co_rank_cir(int k, float* A, int n, float* B, int m, int A_start, int B_star
 
 __device__ __host__
 void merge_circular(volatile float* A, int A_start, int A_len,
-                    volatile float* B, int B_start, int B_len, volatile float* C, int aaa, int bbb, int ccc, int ddd, int eee, float* CC) {
+                    volatile float* B, int B_start, int B_len, float* C) {
     int A_cnt = 0, B_cnt = 0;
     while (A_cnt < A_len && B_cnt < B_len) {
         if (A[A_start] < B[B_start]) {
@@ -64,7 +59,7 @@ void merge_circular(volatile float* A, int A_start, int A_len,
 }
 
 __global__
-void circularMergeSort(float* A, float* B, float* C) {
+void circularMergeSort(float* A, float* B, float* C, const int N, const int M, const int K) {
     __shared__ float AB_S[TILE_SIZE << 1];
     float* A_S = AB_S;
     float* B_S = AB_S + TILE_SIZE;
@@ -142,7 +137,7 @@ void circularMergeSort(float* A, float* B, float* C) {
         // }
         merge_circular(A_S, (A_S_start + a_cur) % TILE_SIZE, a_nxt - a_cur,
                         B_S, (B_S_start + b_cur) % TILE_SIZE, b_nxt - b_cur, 
-                        C + C_cur + C_completed + c_cur, C_cur, C_nxt, C_completed, c_cur, C_cur + C_completed + c_cur, C);
+                        C + C_cur + C_completed + c_cur);
 
         // if (threadIdx.x + blockIdx.x == 0) {
         //     printf("%f %f %f %f\n", C[0], C[1], C[2], C[3]);
@@ -161,47 +156,4 @@ void circularMergeSort(float* A, float* B, float* C) {
         B_S_start = (B_S_start + B_S_consumed) % TILE_SIZE;
         __syncthreads();
     }
-}
-
-int main() {
-    float* a, *b, *c;
-    int deviceId;
-    cudaGetDevice(&deviceId);
-    cudaMallocManaged((void**) &a, sizeof(float) * N);
-    cudaMallocManaged((void**) &b, sizeof(float) * M);
-    cudaMallocManaged((void**) &c, sizeof(float) * K);
-
-    cudaMemPrefetchAsync(a, sizeof(float) * N, cudaCpuDeviceId);
-    cudaMemPrefetchAsync(b, sizeof(float) * M, cudaCpuDeviceId);
-    a[0] = b[0] = 0;
-    for (int i = 1; i < N; i++) {
-        a[i] = a[i - 1] + rand() / (float)RAND_MAX * 10;
-    }
-    for (int i = 1; i < M; i++) {
-        b[i] = b[i - 1] + rand() / (float)RAND_MAX * 10;
-    }
-
-    // int cur = co_rank(10, a, N, b, M);
-    // for (int i = 0; i < 10; i++) {
-    //     printf("%f %f\n", a[i], b[i]);
-    // }
-    // printf("%d\n", cur);
-
-    cudaMemPrefetchAsync(a, sizeof(float) * N, deviceId);
-    cudaMemPrefetchAsync(b, sizeof(float) * M, deviceId);
-    cudaMemPrefetchAsync(c, sizeof(float) * K, deviceId);
-
-    dim3 gridDim((K + TILE_SIZE - 1) / (TILE_SIZE));
-    dim3 blockDim(128);
-
-    circularMergeSort<<<gridDim, blockDim>>>(a, b, c);
-    cudaDeviceSynchronize();
-    printf("%s\n", cudaGetErrorString(cudaGetLastError()));
-
-    cudaMemPrefetchAsync(c, sizeof(float) * K, cudaCpuDeviceId);
-
-    for (int i = 0; i < 0 + 100; i++) {
-        printf("%f\n", c[i]);
-    }
-    return 0;
 }
