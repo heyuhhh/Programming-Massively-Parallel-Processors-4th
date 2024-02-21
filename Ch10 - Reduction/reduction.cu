@@ -10,6 +10,7 @@ __global__
 void reduce_kernel(float* a, float* b, const int MAX) {
     int n = blockDim.x * blockIdx.x + threadIdx.x;
     extern __shared__ float a_sm[]; // 在配置中声明，注意是字节数
+    a_sm[threadIdx.x] = 0;
     if (n < MAX) {
         // thread coarsening
         // 这里换了一种写法，没有COARSE FACTOR参与，因为这样比较方便控制 block 的数量
@@ -51,6 +52,7 @@ __global__
 void reduce_kernel_v2(float* a, float* b, const int MAX) {
     int n = blockDim.x * blockIdx.x + threadIdx.x;
     extern __shared__ float a_sm[];
+    a_sm[threadIdx.x] = 0;
     if (n < MAX) {
         // thread coarsening
         float value = 0.0;
