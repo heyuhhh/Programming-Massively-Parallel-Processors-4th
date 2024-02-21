@@ -1,4 +1,3 @@
-// 基于 warp reduce 进行规约
 #include <stdio.h>
 #include <cuda_runtime.h>
 #include <iostream>
@@ -99,32 +98,36 @@ __global__ void block_all_reduce_sum(float* a, float* y, int N) {
     }
 }
 
-template<const int NUM_THREADS=256 / 4>
+template<const int NUM_THREADS=256>
 __global__ void block_all_reduce_sum_vec4(float* a, float* y, int N) {
     int tid = threadIdx.x;
     int idx = (blockIdx.x * NUM_THREADS + threadIdx.x) * 4;
     constexpr int NUM_WARPS = (NUM_THREADS + WARP_SIZE - 1) / WARP_SIZE;
     __shared__ float smem[NUM_WARPS];
 
-    float4 reg_a;
-    if (idx < N) {
-        reg_a = FLOAT4(a[idx]);
-    } else {
-        reg_a = make_float4(0, 0, 0, 0);
-    }
     float sum = 0.0f;
-    if (idx + 0 < N) {
-        sum += reg_a.x;
+    for (int i = idx; i < N; i += 4 * gridDim.x * blockDim.x) {
+        float4 reg_a;
+        if (i < N) {
+            reg_a = FLOAT4(a[i]);
+        } else {
+            reg_a = make_float4(0, 0, 0, 0);
+        }
+        
+        if (i + 0 < N) {
+            sum += reg_a.x;
+        }
+        if (i + 1 < N) {
+            sum += reg_a.y;
+        }
+        if (i + 2 < N) {
+            sum += reg_a.z;
+        }
+        if (i + 3 < N) {
+            sum += reg_a.w;
+        }
     }
-    if (idx + 1 < N) {
-        sum += reg_a.y;
-    }
-    if (idx + 2 < N) {
-        sum += reg_a.z;
-    }
-    if (idx + 3 < N) {
-        sum += reg_a.w;
-    }
+    
     sum = warp_reduce_sum<WARP_SIZE>(sum);
 
     int warp = threadIdx.x / WARP_SIZE;
@@ -188,7 +191,7 @@ void reduce_kernel_v2(float* a, float* b, const int MAX) {
     }
 }
 
-template<const int NUM_THREADS=256 / 4>
+template<const int NUM_THREADS=256>
 __global__
 void reduce_kernel_v3(float* a, float* b, const int N) {
     int tid = threadIdx.x;
@@ -196,24 +199,27 @@ void reduce_kernel_v3(float* a, float* b, const int N) {
     constexpr int NUM_WARPS = (NUM_THREADS + WARP_SIZE - 1) / WARP_SIZE;
     __shared__ float smem[NUM_WARPS];
 
-    float4 reg_a;
-    if (idx < N) {
-        reg_a = FLOAT4(a[idx]);
-    } else {
-        reg_a = make_float4(0, 0, 0, 0);
-    }
     float sum = 0.0f;
-    if (idx + 0 < N) {
-        sum += reg_a.x;
-    }
-    if (idx + 1 < N) {
-        sum += reg_a.y;
-    }
-    if (idx + 2 < N) {
-        sum += reg_a.z;
-    }
-    if (idx + 3 < N) {
-        sum += reg_a.w;
+    for (int i = idx; i < N; i += 4 * gridDim.x * blockDim.x) {
+        float4 reg_a;
+        if (i < N) {
+            reg_a = FLOAT4(a[i]);
+        } else {
+            reg_a = make_float4(0, 0, 0, 0);
+        }
+        
+        if (i + 0 < N) {
+            sum += reg_a.x;
+        }
+        if (i + 1 < N) {
+            sum += reg_a.y;
+        }
+        if (i + 2 < N) {
+            sum += reg_a.z;
+        }
+        if (i + 3 < N) {
+            sum += reg_a.w;
+        }
     }
     sum = warp_reduce_sum<WARP_SIZE>(sum);
 
@@ -234,29 +240,26 @@ void reduce_kernel_v3(float* a, float* b, const int N) {
     }
 }
 
-float testPerformance(dim3 gridDim, dim3 blockDim, const int N, const int repeat, int algorithm);
+float testPerformance(const int N, const int repeat, int algorithm);
 
 int main() {
     int N_list[16];
     for (int i = 0; i < 16; i++) {
-        N_list[i] = (1 << (i + 10));
+        N_list[i] = (1 << i);
     }
     const int outer_repeat = 10, inner_repeat = 1;
     const int TESTNUM = 16;
     for (int i = 0; i < TESTNUM; i++) {
         const int N = N_list[i];
-        const int NUM_THREADS = 256;
         double total_sec_0 = 0.0, total_sec_1 = 0.0, total_sec_2 = 0.0;
-        dim3 gridDim((N + NUM_THREADS / 4 - 1) / (NUM_THREADS / 4));
-        dim3 blockDim(NUM_THREADS >> 2);   
         for (int j = 0; j < outer_repeat; j++) {
-            double this_sec_0 = testPerformance(gridDim, blockDim, N, inner_repeat, 0);
+            double this_sec_0 = testPerformance(N, inner_repeat, 0);
             total_sec_0 += this_sec_0;
 
-            double this_sec_1 = testPerformance(gridDim, blockDim, N, inner_repeat, 1);
+            double this_sec_1 = testPerformance(N, inner_repeat, 1);
             total_sec_1 += this_sec_1;
 
-            double this_sec_2 = testPerformance(gridDim, blockDim, N, inner_repeat, 2);
+            double this_sec_2 = testPerformance(N, inner_repeat, 2);
             total_sec_2 += this_sec_2;
         }
         double avg_sec_0 = total_sec_0 / outer_repeat;
@@ -272,7 +275,7 @@ int main() {
     }
 }
 
-float testPerformance(dim3 gridDim, dim3 blockDim, const int N, const int repeat, int algorithm) {
+float testPerformance(const int N, const int repeat, int algorithm) {
     float* a;
     cudaMallocManaged((void**) &a, sizeof(float) * N);
     srand(time(NULL));
@@ -281,47 +284,52 @@ float testPerformance(dim3 gridDim, dim3 blockDim, const int N, const int repeat
         a[i] = rand() / (float) RAND_MAX;
         ans += a[i];
     }
-    int blockCount = gridDim.x;
+
+    const int NUM_BLOCKS = 1024;
+    const int NUM_THREADS = 256;   
+    dim3 gridDim(NUM_BLOCKS);
+    dim3 blockDim(NUM_THREADS);
+
     float* b, *c;
-    cudaMallocManaged((void**) &b, sizeof(float) * blockCount);
+    cudaMallocManaged((void**) &b, sizeof(float) * NUM_BLOCKS);
     cudaMallocManaged((void**) &c, sizeof(float));
-    cudaMemset(b, 0, sizeof(float) * blockCount);
+    cudaMemset(b, 0, sizeof(float) * NUM_BLOCKS);
     cudaMemset(c, 0, sizeof(float));
     
     cudaEvent_t start, end;
     cudaEventCreate(&start);
     cudaEventCreate(&end);
-    cudaEventRecord(start);
 
     float max_error = 0.0;
+
+    cudaEventRecord(start);
 
     if (algorithm == 0) {
         reduce_kernel_v2<<<gridDim, blockDim, sizeof(float) * blockDim.x>>>(a, b, N);
         cudaDeviceSynchronize();
-        reduce_kernel_v2<<<1, blockDim, sizeof(float) * blockDim.x>>>(b, c, blockCount);
+        reduce_kernel_v2<<<1, blockDim, sizeof(float) * blockDim.x>>>(b, c, NUM_BLOCKS);
         cudaDeviceSynchronize();
-        max_error = max(max_error, c[0] - ans);
+        max_error = max(max_error, fabs(c[0] - ans));
     } else if (algorithm == 1) {
         block_all_reduce_sum_vec4<<<gridDim, blockDim>>>(a, c, N);
         cudaDeviceSynchronize();
-        max_error = max(max_error, c[0] - ans);
+        max_error = max(max_error, fabs(c[0] - ans));
     } else {
-        reduce_kernel_v3<<<gridDim, blockDim, sizeof(float) * blockDim.x>>>(a, b, N);
+        reduce_kernel_v3<<<gridDim, blockDim>>>(a, b, N);
         cudaDeviceSynchronize();
-        reduce_kernel_v3<<<1, blockDim, sizeof(float) * blockDim.x>>>(b, c, blockCount);
+        reduce_kernel_v3<<<1, blockDim>>>(b, c, NUM_BLOCKS);
         cudaDeviceSynchronize();
-        max_error = max(max_error, c[0] - ans);
+        max_error = max(max_error, fabs(c[0] - ans));
     }
     cudaEventRecord(end);
     cudaEventSynchronize(end);
 
-    printf("ans=%f, c[0]=%f\n", ans, c[0]);
-
-    printf("Algorithm %d's max error is : %f\n", algorithm, max_error);
-
     float msec, sec;
     cudaEventElapsedTime(&msec, start, end);
     sec = msec / 1000 / repeat;
+
+    printf("ans=%f, c[0]=%f\n", ans, c[0]);
+    printf("Algorithm %d's max error is : %f\n", algorithm, max_error);
 
     cudaFree(a);
     cudaFree(b);
