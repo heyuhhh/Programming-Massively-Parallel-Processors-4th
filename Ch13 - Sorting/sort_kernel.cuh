@@ -5,6 +5,9 @@
 #include "../Ch12 - Merge/merge_kernel.cuh"
 #include "../utils/config.cuh"
 
+__device__ __host__
+extern void merge_seq(float* A, int A_len, float* B, int B_len, float* C, int st);
+
 __global__
 void local_radix_sort(int* a, int* b, int* c, const int N, int iter);
 

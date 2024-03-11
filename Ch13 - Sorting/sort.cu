@@ -27,22 +27,36 @@ void radixSort(int* a, const int N) {
     cudaMalloc((void**) &b_d, sizeof(int) * grid_size * (1 << Radix_N));
     cudaMallocManaged((void**) &c_d, sizeof(int) * (1 << Radix_N));
     cudaMallocManaged((void**) &d_d, sizeof(int) * N);
-    for (int i = 0; i < 32 / Radix_N; i++) {
-        // local radix sort
-        dim3 grid(grid_size);
-        dim3 block(SECTION_SIZE);
-        cudaMemset(b_d, 0, sizeof(int) * (1 << Radix_N) * grid_size);
-        cudaMemset(c_d, 0, sizeof(int) * (1 << Radix_N));
-        local_radix_sort<<<grid, block>>>(a_d, b_d, c_d, N, i);
-        exclusive_scan(c_d, c_d, 1 << Radix_N);
+    cudaEvent_t start_event, stop_event;
+    cudaEventCreate(&start_event);
+    cudaEventCreate(&stop_event);
+    float total_time = 0;
+    for (int tt = 0; tt < 10; tt++) {
+        cudaEventRecord(start_event, 0);
+        for (int i = 0; i < 32 / Radix_N; i++) {
+            // local radix sort
+            dim3 grid(grid_size);
+            dim3 block(SECTION_SIZE);
+            cudaMemset(b_d, 0, sizeof(int) * (1 << Radix_N) * grid_size);
+            cudaMemset(c_d, 0, sizeof(int) * (1 << Radix_N));
+            local_radix_sort<<<grid, block>>>(a_d, b_d, c_d, N, i);
+            exclusive_scan(c_d, c_d, 1 << Radix_N);
 
-        for (int j = 0; j < 1 << Radix_N; j++) {
-            exclusive_scan(b_d + j * grid_size, b_d + j * grid_size, grid_size);
+            for (int j = 0; j < 1 << Radix_N; j++) {
+                exclusive_scan(b_d + j * grid_size, b_d + j * grid_size, grid_size);
+            }
+            
+            global_radix_sort<<<grid_size, block>>>(a_d, b_d, c_d, d_d, N, i);
+            cudaMemcpy(a_d, d_d, sizeof(int) * N, cudaMemcpyDeviceToDevice);
         }
-        
-        global_radix_sort<<<grid_size, block>>>(a_d, b_d, c_d, d_d, N, i);
-        cudaMemcpy(a_d, d_d, sizeof(int) * N, cudaMemcpyDeviceToDevice);
+        cudaEventRecord(stop_event, 0);
+        cudaEventSynchronize(stop_event);
+        float time = 0;
+        cudaEventElapsedTime(&time, start_event, stop_event);
+        total_time += time;
     }
+    
+    printf("time is: %f\n", total_time / 1.0e3f / 10);
 
     cudaMemcpy(a, a_d, sizeof(int) * N, cudaMemcpyDeviceToHost);
     cudaFree(a_d);

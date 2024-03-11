@@ -43,6 +43,7 @@ void exclusive_scan(float* out, float* in, const int N) {
     cudaMemcpy(out, out_d, sizeof(float) * N, cudaMemcpyDeviceToHost);
 }
 
+// --------------------- int -----------------------------
 
 void scan(int* out, const int N, int mode) {
 

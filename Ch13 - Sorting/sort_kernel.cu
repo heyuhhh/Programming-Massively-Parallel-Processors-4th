@@ -1,6 +1,8 @@
 #include "sort_kernel.cuh"
 #include <cstdio>
 
+extern void merge_seq(float* A, int A_len, float* B, int B_len, float* C, int st);
+
 __global__
 void merge_sort(float* a, float* c, const int N, int stride) {
     int st = (blockDim.x * blockIdx.x + threadIdx.x) * (2 * stride);
